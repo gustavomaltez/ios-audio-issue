@@ -1,34 +1,67 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import './App.css'
+import { useEffect, useRef, useState } from "react";
 
-function App() {
-  const [count, setCount] = useState(0)
+export function App(): JSX.Element {
+    const [isInitialized, setIsInitialized] = useState(false);
 
-  return (
-    <div className="App">
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </div>
-  )
+    if (!isInitialized) return <button onClick={() => setIsInitialized(true)}>Click To Start</button>;
+
+    return <Recorder />;
 }
 
-export default App
+const audio = new Audio("https://samplelib.com/lib/preview/mp3/sample-15s.mp3");
+
+function Recorder(): JSX.Element {
+    const { isRecording, startRecording, stopRecording } = useMicrophoneRecorder();
+
+    useEffect(() => {
+        audio.loop = true;
+        audio.play();
+    }, []);
+
+
+    return (
+        <div>
+            <button onClick={isRecording ? stopRecording : startRecording}>
+                {isRecording ? "Stop" : "Start"} recording
+            </button>
+            <div id="logs"></div>
+        </div>
+    );
+}
+
+function useMicrophoneRecorder() {
+    const [isRecording, setIsRecording] = useState(false);
+    const recorder = useRef<MediaRecorder>();
+
+    async function setupRecorder() {
+        const stream = await getMediaStream();
+        recorder.current = new MediaRecorder(stream, { mimeType: "audio/webm", audioBitsPerSecond: 16000, });
+        (window as any).recorder = recorder;
+        recorder.current.ondataavailable = (e) => {
+            console.log(e.data);
+            const logs = document.getElementById("logs") as HTMLDivElement;
+            logs.innerHTML += `<p>Finished Recording: Blob size ${e.data.size}</p>`;
+        };
+        recorder.current.onstart = () => setIsRecording(true);
+        recorder.current.onstop = () => setIsRecording(false);
+    }
+
+    return {
+        startRecording: async () => {
+            if (recorder?.current?.state === "recording") recorder.current?.stop();
+            if (!recorder.current) await setupRecorder();
+            recorder.current?.start();
+        },
+        stopRecording: () => {
+            recorder?.current?.stop();
+        },
+        isRecording,
+    };
+}
+
+
+
+async function getMediaStream() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 }, video: false });
+    return stream;
+}
